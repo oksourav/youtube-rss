@@ -1,0 +1,28 @@
+# Render Deployment Configuration
+version: 1
+
+services:
+  - type: web
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python youtube_rss_filter.py
+    healthCheckPath: /health
+    envVars:
+      - key: YOUTUBE_CHANNELS
+        value: ""
+      - key: YOUTUBE_USERNAMES
+        value: ""
+      - key: YOUTUBE_API_KEY
+        value: ""
+      - key: MAX_SHORT_DURATION
+        value: "90"
+      - key: INCLUDE_DURATION
+        value: "true"
+      - key: STRICT_FILTER
+        value: "false"
+      - key: DEBUG
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.9.18"
