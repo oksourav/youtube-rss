@@ -341,13 +341,18 @@ class YouTubeRSSProcessor:
 processor = YouTubeRSSProcessor()
 
 def generate_atom_feed(entries: List[Dict]) -> str:
-    """Generate an exact replica of YouTube's RSS format for Feedly compatibility."""
-    current_time = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00:00')
+    """Generate a feed EXACTLY matching YouTube's native RSS format."""
     
-    # Create a fixed channel ID for our filtered feed
-    channel_id = "youtube-filtered-feed"
+    # Generate timestamps in YouTube's format
+    now = datetime.now(timezone.utc)
+    current_time = now.strftime('%Y-%m-%dT%H:%M:%S+00:00')
     
-    atom_feed = f'''<?xml version="1.0" encoding="UTF-8"?>
+    # Create a channel ID
+    channel_id = "UC-filtered"
+    
+    # Generate exact YouTube feed XML format
+    # Note: indentation and spaces are critical - must match YouTube
+    feed_prefix = f'''<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
  <link rel="self" href="{escape(Config.RENDER_EXTERNAL_URL)}/rss"/>
  <id>yt:channel:{channel_id}</id>
@@ -360,12 +365,13 @@ def generate_atom_feed(entries: List[Dict]) -> str:
  </author>
  <published>{current_time}</published>
 '''
+
+    feed_entries = []
     
     for entry in entries:
         video_id = entry.get('video_id')
-        
-        # Try to extract from link if missing
         if not video_id:
+            # Try to extract from link
             link = entry.get('link', '')
             if link:
                 match = re.search(r'(?:v=|be/|embed/|v/)([a-zA-Z0-9_-]{11})', link)
@@ -373,44 +379,42 @@ def generate_atom_feed(entries: List[Dict]) -> str:
                     video_id = match.group(1)
         
         if not video_id:
-            logger.warning(f"Skipping entry without video ID: {entry.get('title')}")
             continue
-            
-        # Get dates in YouTube format
+        
+        # Parse dates and format like YouTube does
         try:
-            published = date_parser.parse(entry.get('published', current_time))
-            updated = date_parser.parse(entry.get('updated', current_time))
-            published_formatted = published.strftime('%Y-%m-%dT%H:%M:%S+00:00')
-            updated_formatted = updated.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+            dt_pub = date_parser.parse(entry.get('published', current_time))
+            dt_upd = date_parser.parse(entry.get('updated', current_time))
+            pub_fmt = dt_pub.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+            upd_fmt = dt_upd.strftime('%Y-%m-%dT%H:%M:%S+00:00')
         except:
-            published_formatted = current_time
-            updated_formatted = current_time
+            pub_fmt = current_time
+            upd_fmt = current_time
         
-        # Original summary/description
-        description = entry.get('original_summary', entry.get('summary', ''))
+        # Get title and description
+        title = escape(entry.get('title', 'Untitled'))
+        desc = escape(entry.get('original_summary', entry.get('summary', '')))
+        author = escape(entry.get('author', 'YouTube Filter'))
         
-        # Author info
-        author = entry.get('author', 'YouTube Filter')
-        
-        # Add entry in EXACT YouTube format with proper spacing/indentation
-        atom_feed += f'''
+        # Create entry with EXACT YouTube format
+        entry_xml = f'''
  <entry>
   <id>yt:video:{video_id}</id>
   <yt:videoId>{video_id}</yt:videoId>
   <yt:channelId>{channel_id}</yt:channelId>
-  <title>{escape(entry.get('title', 'Untitled'))}</title>
+  <title>{title}</title>
   <link rel="alternate" href="https://www.youtube.com/watch?v={video_id}"/>
   <author>
-   <name>{escape(author)}</name>
-   <uri>{escape(Config.RENDER_EXTERNAL_URL)}</uri>
+   <name>{author}</name>
+   <uri>https://www.youtube.com/channel/{channel_id}</uri>
   </author>
-  <published>{published_formatted}</published>
-  <updated>{updated_formatted}</updated>
+  <published>{pub_fmt}</published>
+  <updated>{upd_fmt}</updated>
   <media:group>
-   <media:title>{escape(entry.get('title', 'Untitled'))}</media:title>
+   <media:title>{title}</media:title>
    <media:content url="https://www.youtube.com/v/{video_id}?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
    <media:thumbnail url="https://i4.ytimg.com/vi/{video_id}/hqdefault.jpg" width="480" height="360"/>
-   <media:description>{escape(description)}</media:description>
+   <media:description>{desc}</media:description>
    <media:community>
     <media:starRating count="0" average="5.00" min="1" max="5"/>
     <media:statistics views="0"/>
@@ -418,8 +422,12 @@ def generate_atom_feed(entries: List[Dict]) -> str:
   </media:group>
  </entry>'''
         
-    atom_feed += '\n</feed>'
-    return atom_feed
+        feed_entries.append(entry_xml)
+    
+    # Combine all parts
+    feed_xml = feed_prefix + ''.join(feed_entries) + '\n</feed>'
+    
+    return feed_xml
 
 # Flask routes
 @app.route('/')
@@ -751,7 +759,7 @@ def rss_discovery():
 @app.route('/rss.xml')
 @app.route('/feed.xml')
 def rss_feed():
-    """Main RSS feed endpoint with proper caching headers."""
+    """Main RSS feed endpoint with proper YouTube headers."""
     try:
         stats.requests += 1
         stats.last_request = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
@@ -764,10 +772,9 @@ def rss_feed():
             atom_content,
             mimetype='application/atom+xml',
             headers={
-                'Cache-Control': 'public, max-age=900',  # 15 minutes
-                'Content-Type': 'application/atom+xml; charset=utf-8',
-                'X-Content-Type-Options': 'nosniff',
-                'X-RSS-Generator': 'YouTube RSS Shorts Filter v1.0'
+                'Cache-Control': 'public, max-age=900',
+                'Content-Type': 'application/atom+xml; charset=UTF-8',  # YouTube's exact content type
+                'X-Content-Type-Options': 'nosniff'
             }
         )
         
@@ -782,7 +789,7 @@ def rss_feed():
             status=500,
             mimetype='application/xml'
         )
-
+        
 @app.route('/health')
 def health_check():
     """Health check endpoint for monitoring."""
