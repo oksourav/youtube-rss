@@ -341,7 +341,7 @@ class YouTubeRSSProcessor:
 processor = YouTubeRSSProcessor()
 
 def generate_atom_feed(entries: List[Dict]) -> str:
-    """Generate Atom 1.0 feed matching YouTube's native RSS format with iframe embeds for Feedly compatibility."""
+    """Generate Atom 1.0 feed with YouTube oEmbed compatibility for Feedly."""
     current_time = datetime.now(timezone.utc).isoformat()
     
     atom_feed = f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -352,7 +352,7 @@ def generate_atom_feed(entries: List[Dict]) -> str:
 <title>YouTube RSS (No Shorts)</title>
 <link rel="alternate" href="{escape(Config.RENDER_EXTERNAL_URL)}"/>
 <author>
-<n>YouTube RSS Filter</n>
+<name>YouTube RSS Filter</name>
 <uri>{escape(Config.RENDER_EXTERNAL_URL)}</uri>
 </author>
 <published>{current_time}</published>
@@ -395,30 +395,31 @@ def generate_atom_feed(entries: List[Dict]) -> str:
             published_formatted = current_time.replace('Z', '+00:00')
             updated_formatted = current_time.replace('Z', '+00:00')
         
-        # Get the enhanced content with iframe
-        enhanced_content = entry.get('summary', '') + "Debugging Taken from content"
-        
-        # Get original description for media:description
-        original_summary = entry.get('original_summary', '')
+        # Get original description
+        original_summary = entry.get('original_summary', entry.get('summary', ''))
         
         # Extract author name properly
         author_name = entry.get('author', 'Unknown Channel')
         
-        # Build the entry in exact YouTube RSS format with enhanced content
+        # Build the entry with YouTube's exact original format (what Feedly expects)
         atom_feed += f'''
 <entry>
 <id>yt:video:{video_id}</id>
 <yt:videoId>{video_id}</yt:videoId>
-<yt:channelId>youtube-shorts-filter</yt:channelId>
 <title>{escape(entry.get('title', 'Untitled'))}</title>
-<link rel="alternate" href="{escape(entry.get('link', ''))}"/>
+<link rel="alternate" href="https://www.youtube.com/watch?v={video_id}"/>
 <author>
-<n>{escape(author_name)}</n>
+<name>{escape(author_name)}</name>
 </author>
 <published>{published_formatted}</published>
 <updated>{updated_formatted}</updated>
-<content type="html"><![CDATA[{enhanced_content}]]></content>
-<summary type="html"><![CDATA[{enhanced_content}]]></summary>
+<content type="html">{escape(original_summary)}</content>
+<media:group>
+<media:title>{escape(entry.get('title', 'Untitled'))}</media:title>
+<media:content url="https://www.youtube.com/v/{video_id}?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+<media:thumbnail url="https://i4.ytimg.com/vi/{video_id}/hqdefault.jpg" width="480" height="360"/>
+<media:description>{escape(original_summary)}</media:description>
+</media:group>
 </entry>'''
         
         entries_added += 1
