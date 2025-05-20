@@ -197,7 +197,31 @@ class YouTubeRSSProcessor:
                 return match.group(1)
         return None
     
-
+    def generate_enhanced_content(self, entry: Dict) -> str:
+        """Generate enhanced HTML content with embedded iframe player for Feedly."""
+        video_id = self.extract_video_id(entry.get('link', ''))
+        if not video_id:
+            return entry.get('summary', '')
+        
+        # Get original summary/description
+        original_summary = entry.get('summary', '')
+        
+        # Create enhanced content with embedded iframe player
+        enhanced_content = f'''<div style="margin-bottom: 15px;">
+        <iframe src="https://www.youtube.com/embed/{video_id}" 
+                width="560" 
+                height="315" 
+                frameborder="0" 
+                allowfullscreen
+                style="max-width: 100%; height: auto;">
+        </iframe>
+    </div>
+    <div style="margin-top: 10px;">
+        <p><strong>Watch on YouTube:</strong> <a href="{entry.get('link', '')}" target="_blank" rel="noopener">{entry.get('link', '')}</a></p>
+        {f'<div style="margin-top: 10px;"><strong>Description:</strong><br/>{original_summary}</div>' if original_summary else ''}
+    </div>'''
+    
+        return enhanced_content
 
     def process_entry(self, entry: Dict) -> Optional[Dict]:
         """Process a single feed entry."""
@@ -223,12 +247,15 @@ class YouTubeRSSProcessor:
             if hasattr(entry, 'content') and entry.content:
                 original_summary = entry.content[0].value if entry.content else original_summary
             
-            # Create processed entry with original YouTube RSS structure preserved
+            # Generate enhanced content with iframe embed
+            enhanced_content = self.generate_enhanced_content(entry)
+            
+            # Create processed entry with both original and enhanced content
             processed_entry = {
                 'title': processed_title,
                 'link': entry.get('link', ''),
                 'published': entry.get('published', ''),
-                'summary': original_summary,  # Keep original for content
+                'summary': enhanced_content,  # Enhanced content with iframe
                 'original_summary': original_summary,  # Store original separately
                 'author': entry.get('author', ''),
                 'id': entry.get('id', ''),
@@ -244,7 +271,8 @@ class YouTubeRSSProcessor:
             logger.error(f"Error processing entry: {e}")
             stats.errors += 1
             return None
-    
+
+
     def get_all_feeds(self) -> List[Dict]:
         """Fetch and process all configured YouTube feeds."""
         feeds = []
@@ -313,7 +341,7 @@ class YouTubeRSSProcessor:
 processor = YouTubeRSSProcessor()
 
 def generate_atom_feed(entries: List[Dict]) -> str:
-    """Generate Atom 1.0 feed matching YouTube's native RSS format for perfect Feedly compatibility."""
+    """Generate Atom 1.0 feed matching YouTube's native RSS format with iframe embeds for Feedly compatibility."""
     current_time = datetime.now(timezone.utc).isoformat()
     
     atom_feed = f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -324,7 +352,7 @@ def generate_atom_feed(entries: List[Dict]) -> str:
 <title>YouTube RSS (No Shorts)</title>
 <link rel="alternate" href="{escape(Config.RENDER_EXTERNAL_URL)}"/>
 <author>
-<name>YouTube RSS Filter</name>
+<n>YouTube RSS Filter</n>
 <uri>{escape(Config.RENDER_EXTERNAL_URL)}</uri>
 </author>
 <published>{current_time}</published>
@@ -339,7 +367,6 @@ def generate_atom_feed(entries: List[Dict]) -> str:
         if not video_id:
             link = entry.get('link', '')
             if link:
-                # Use the same extraction logic
                 patterns = [
                     r'watch\?v=([a-zA-Z0-9_-]{11})',
                     r'youtu\.be/([a-zA-Z0-9_-]{11})',
@@ -353,8 +380,7 @@ def generate_atom_feed(entries: List[Dict]) -> str:
                         break
         
         if not video_id:
-            # Still no video ID - skip this entry
-            logger.warning(f"Skipping entry without video ID: {entry.get('title', 'Unknown')} - Link: {entry.get('link', 'No link')}")
+            logger.warning(f"Skipping entry without video ID: {entry.get('title', 'Unknown')}")
             continue
             
         published = entry.get('published', current_time)
@@ -362,7 +388,6 @@ def generate_atom_feed(entries: List[Dict]) -> str:
         # Parse and format the published date to match YouTube format exactly
         try:
             parsed_date = date_parser.parse(published)
-            # YouTube uses this exact format: YYYY-MM-DDTHH:MM:SS+00:00
             published_formatted = parsed_date.strftime('%Y-%m-%dT%H:%M:%S+00:00')
             updated_formatted = parsed_date.strftime('%Y-%m-%dT%H:%M:%S+00:00')
         except Exception as e:
@@ -370,13 +395,16 @@ def generate_atom_feed(entries: List[Dict]) -> str:
             published_formatted = current_time.replace('Z', '+00:00')
             updated_formatted = current_time.replace('Z', '+00:00')
         
-        # Get the original summary/description
-        original_summary = entry.get('original_summary', entry.get('summary', ''))
+        # Get the enhanced content with iframe
+        enhanced_content = entry.get('summary', '')
+        
+        # Get original description for media:description
+        original_summary = entry.get('original_summary', '')
         
         # Extract author name properly
         author_name = entry.get('author', 'Unknown Channel')
         
-        # Build the entry in exact YouTube RSS format
+        # Build the entry in exact YouTube RSS format with enhanced content
         atom_feed += f'''
 <entry>
 <id>yt:video:{video_id}</id>
@@ -385,11 +413,13 @@ def generate_atom_feed(entries: List[Dict]) -> str:
 <title>{escape(entry.get('title', 'Untitled'))}</title>
 <link rel="alternate" href="{escape(entry.get('link', ''))}"/>
 <author>
-<name>{escape(author_name)}</name>
+<n>{escape(author_name)}</n>
 <uri>https://www.youtube.com/channel/youtube-shorts-filter</uri>
 </author>
 <published>{published_formatted}</published>
 <updated>{updated_formatted}</updated>
+<content type="html"><![CDATA[{enhanced_content}]]></content>
+<summary type="html"><![CDATA[{enhanced_content}]]></summary>
 <media:group>
 <media:title>{escape(entry.get('title', 'Untitled'))}</media:title>
 <media:content url="https://www.youtube.com/v/{video_id}?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
