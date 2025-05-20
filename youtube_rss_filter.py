@@ -420,16 +420,6 @@ def generate_atom_feed(entries: List[Dict]) -> str:
 <updated>{updated_formatted}</updated>
 <content type="html"><![CDATA[{enhanced_content}]]>Debugging Taken from content</content>
 <summary type="html"><![CDATA[{enhanced_content}]]>Debugging Taken from summary</summary>
-<media:group>
-<media:title>{escape(entry.get('title', 'Untitled'))}</media:title>
-<media:content url="https://www.youtube.com/v/{video_id}?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
-<media:thumbnail url="https://i4.ytimg.com/vi/{video_id}/hqdefault.jpg" width="480" height="360"/>
-<media:description>{escape(original_summary)} Debugging Taken from media:description</media:description>
-<media:community>
-<media:starRating count="0" average="5.00" min="1" max="5"/>
-<media:statistics views="0"/>
-</media:community>
-</media:group>
 </entry>'''
         
         entries_added += 1
