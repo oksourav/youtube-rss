@@ -54,6 +54,7 @@ class Config:
     DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
     PORT = int(os.getenv('PORT', '5000'))
     RENDER_EXTERNAL_URL = os.getenv('RENDER_EXTERNAL_URL', f'http://localhost:{os.getenv("PORT", "5000")}')
+    FEEDLY_ENHANCED = os.getenv('FEEDLY_ENHANCED', 'true').lower() == 'true'
     
     # Ensure URL has proper scheme
     if not RENDER_EXTERNAL_URL.startswith(('http://', 'https://')):
@@ -202,22 +203,29 @@ class YouTubeRSSProcessor:
         if not video_id:
             return entry.get('summary', '')
         
-        # Create enhanced content with thumbnail and embedded player
-        enhanced_content = f'''
-        <div style="margin-bottom: 15px;">
-            <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
-                <iframe src="https://www.youtube.com/embed/{video_id}" 
-                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-                        frameborder="0" 
-                        allowfullscreen>
-                </iframe>
-            </div>
-        </div>
-        <div style="margin-top: 10px;">
-            <p><strong>Watch on YouTube:</strong> <a href="{entry.get('link', '')}" target="_blank" rel="noopener">{entry.get('link', '')}</a></p>
-            {f'<p><strong>Original Description:</strong></p><div>{entry.get("summary", "")}</div>' if entry.get('summary') else ''}
-        </div>
-        '''
+        # Get original summary/description
+        original_summary = entry.get('summary', '')
+        
+        if Config.FEEDLY_ENHANCED:
+            # Enhanced mode: Create content optimized for Feedly with large thumbnail
+            enhanced_content = f'''<div class="youtube-video">
+<p><a href="{entry.get('link', '')}" target="_blank" rel="noopener">
+<img src="https://img.youtube.com/vi/{video_id}/maxresdefault.jpg" alt="Watch: {escape(entry.get('title', 'Video'))}" style="max-width:100%; height:auto; border:1px solid #ccc; border-radius:4px; display:block;" />
+</a></p>
+<p style="text-align:center; margin:10px 0;">
+<a href="{entry.get('link', '')}" target="_blank" rel="noopener" style="background:#ff0000; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
+▶️ Watch on YouTube
+</a>
+</p>
+{f'<div style="margin-top:15px; padding:10px; background:#f9f9f9; border-left:3px solid #ff0000;"><strong>Description:</strong><br/>{original_summary}</div>' if original_summary else ''}
+</div>'''
+        else:
+            # Simple mode: Just thumbnail and link
+            enhanced_content = f'''<p><a href="{entry.get('link', '')}" target="_blank" rel="noopener">
+<img src="https://img.youtube.com/vi/{video_id}/maxresdefault.jpg" alt="Video Thumbnail" style="max-width:100%; height:auto;" />
+</a></p>
+<p><a href="{entry.get('link', '')}" target="_blank" rel="noopener">▶️ Watch this video on YouTube</a></p>
+{f'<div>{original_summary}</div>' if original_summary else ''}'''
         
         return enhanced_content
 
