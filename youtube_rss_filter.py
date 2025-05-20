@@ -341,26 +341,26 @@ class YouTubeRSSProcessor:
 processor = YouTubeRSSProcessor()
 
 def generate_atom_feed(entries: List[Dict]) -> str:
-    """Generate feed identical to YouTube's native format for Feedly compatibility."""
-    current_time = datetime.now(timezone.utc).isoformat()
+    """Generate an exact replica of YouTube's RSS format for Feedly compatibility."""
+    current_time = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00:00')
+    
+    # Create a fixed channel ID for our filtered feed
+    channel_id = "youtube-filtered-feed"
     
     atom_feed = f'''<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom" 
-      xmlns:media="http://search.yahoo.com/mrss/" 
-      xmlns:yt="http://www.youtube.com/xml/schemas/2015">
-  <link rel="self" href="{escape(Config.RENDER_EXTERNAL_URL)}/rss"/>
-  <id>tag:youtube.com,2008:channel:filtered</id>
-  <yt:channelId>filtered</yt:channelId>
-  <title>YouTube RSS (No Shorts)</title>
-  <author>
-    <name>YouTube RSS Filter</name>
-    <uri>{escape(Config.RENDER_EXTERNAL_URL)}</uri>
-  </author>
-  <published>{current_time}</published>
-  <updated>{current_time}</updated>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <link rel="self" href="{escape(Config.RENDER_EXTERNAL_URL)}/rss"/>
+ <id>yt:channel:{channel_id}</id>
+ <yt:channelId>{channel_id}</yt:channelId>
+ <title>YouTube RSS (No Shorts)</title>
+ <link rel="alternate" href="{escape(Config.RENDER_EXTERNAL_URL)}"/>
+ <author>
+  <name>YouTube RSS Filter</name>
+  <uri>{escape(Config.RENDER_EXTERNAL_URL)}</uri>
+ </author>
+ <published>{current_time}</published>
 '''
     
-    entries_added = 0
     for entry in entries:
         video_id = entry.get('video_id')
         
@@ -376,46 +376,49 @@ def generate_atom_feed(entries: List[Dict]) -> str:
             logger.warning(f"Skipping entry without video ID: {entry.get('title')}")
             continue
             
-        # Format dates like YouTube does
+        # Get dates in YouTube format
         try:
-            dt = date_parser.parse(entry.get('published', current_time))
-            published = dt.strftime('%Y-%m-%dT%H:%M:%S+00:00')
-            updated = dt.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+            published = date_parser.parse(entry.get('published', current_time))
+            updated = date_parser.parse(entry.get('updated', current_time))
+            published_formatted = published.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+            updated_formatted = updated.strftime('%Y-%m-%dT%H:%M:%S+00:00')
         except:
-            published = current_time.replace('Z', '+00:00')
-            updated = current_time.replace('Z', '+00:00')
+            published_formatted = current_time
+            updated_formatted = current_time
         
-        # Original summary
-        summary = entry.get('original_summary', entry.get('summary', ''))
+        # Original summary/description
+        description = entry.get('original_summary', entry.get('summary', ''))
         
         # Author info
-        author = entry.get('author', 'Unknown')
+        author = entry.get('author', 'YouTube Filter')
         
-        # Format exactly like YouTube's feeds
+        # Add entry in EXACT YouTube format with proper spacing/indentation
         atom_feed += f'''
-  <entry>
-    <id>yt:video:{video_id}</id>
-    <yt:videoId>{video_id}</yt:videoId>
-    <title>{escape(entry.get('title', 'Untitled'))}</title>
-    <link rel="alternate" href="https://www.youtube.com/watch?v={video_id}"/>
-    <author>
-      <name>{escape(author)}</name>
-      <uri>https://www.youtube.com/channel/filtered</uri>
-    </author>
-    <published>{published}</published>
-    <updated>{updated}</updated>
-    <media:group>
-      <media:title>{escape(entry.get('title', 'Untitled'))}</media:title>
-      <media:content url="https://www.youtube.com/v/{video_id}?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
-      <media:thumbnail url="https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" width="480" height="360"/>
-      <media:description>{escape(summary)}</media:description>
-    </media:group>
-  </entry>'''
+ <entry>
+  <id>yt:video:{video_id}</id>
+  <yt:videoId>{video_id}</yt:videoId>
+  <yt:channelId>{channel_id}</yt:channelId>
+  <title>{escape(entry.get('title', 'Untitled'))}</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v={video_id}"/>
+  <author>
+   <name>{escape(author)}</name>
+   <uri>{escape(Config.RENDER_EXTERNAL_URL)}</uri>
+  </author>
+  <published>{published_formatted}</published>
+  <updated>{updated_formatted}</updated>
+  <media:group>
+   <media:title>{escape(entry.get('title', 'Untitled'))}</media:title>
+   <media:content url="https://www.youtube.com/v/{video_id}?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i4.ytimg.com/vi/{video_id}/hqdefault.jpg" width="480" height="360"/>
+   <media:description>{escape(description)}</media:description>
+   <media:community>
+    <media:starRating count="0" average="5.00" min="1" max="5"/>
+    <media:statistics views="0"/>
+   </media:community>
+  </media:group>
+ </entry>'''
         
-        entries_added += 1
-
     atom_feed += '\n</feed>'
-    logger.info(f"Generated feed with {entries_added} entries (YouTube native format)")
     return atom_feed
 
 # Flask routes
