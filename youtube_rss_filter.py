@@ -34,10 +34,6 @@ from flask import Flask, Response, render_template_string, jsonify, request
 from xml.sax.saxutils import escape
 from dateutil import parser as date_parser
 
-from dotenv import load_dotenv
-
-load_dotenv()  # take environment variables from .env.
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -185,6 +181,46 @@ class YouTubeRSSProcessor:
         
         return title
     
+    def extract_video_id(self, url: str) -> Optional[str]:
+        """Extract YouTube video ID from URL."""
+        patterns = [
+            r'watch\?v=([a-zA-Z0-9_-]{11})',
+            r'youtu\.be/([a-zA-Z0-9_-]{11})',
+            r'embed/([a-zA-Z0-9_-]{11})',
+            r'v/([a-zA-Z0-9_-]{11})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
+    
+    def generate_enhanced_content(self, entry: Dict) -> str:
+        """Generate enhanced HTML content with embedded player for Feedly."""
+        video_id = self.extract_video_id(entry.get('link', ''))
+        if not video_id:
+            return entry.get('summary', '')
+        
+        # Create enhanced content with thumbnail and embedded player
+        enhanced_content = f'''
+        <div style="margin-bottom: 15px;">
+            <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+                <iframe src="https://www.youtube.com/embed/{video_id}" 
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
+                        frameborder="0" 
+                        allowfullscreen>
+                </iframe>
+            </div>
+        </div>
+        <div style="margin-top: 10px;">
+            <p><strong>Watch on YouTube:</strong> <a href="{entry.get('link', '')}" target="_blank" rel="noopener">{entry.get('link', '')}</a></p>
+            {f'<p><strong>Original Description:</strong></p><div>{entry.get("summary", "")}</div>' if entry.get('summary') else ''}
+        </div>
+        '''
+        
+        return enhanced_content
+
     def process_entry(self, entry: Dict) -> Optional[Dict]:
         """Process a single feed entry."""
         try:
@@ -201,16 +237,21 @@ class YouTubeRSSProcessor:
             duration = self.extract_duration_from_title(entry.get('title', ''))
             processed_title = self.add_duration_to_title(entry.get('title', ''), duration)
             
-            # Create processed entry
+            # Extract video ID for media enclosure
+            video_id = self.extract_video_id(entry.get('link', ''))
+            
+            # Create processed entry with enhanced content
             processed_entry = {
                 'title': processed_title,
                 'link': entry.get('link', ''),
                 'published': entry.get('published', ''),
-                'summary': entry.get('summary', ''),
+                'summary': self.generate_enhanced_content(entry),
                 'author': entry.get('author', ''),
                 'id': entry.get('id', ''),
                 'duration': duration,
-                'original_title': entry.get('title', '')
+                'original_title': entry.get('title', ''),
+                'video_id': video_id,
+                'thumbnail': f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg' if video_id else None
             }
             
             return processed_entry
