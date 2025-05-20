@@ -396,7 +396,7 @@ def generate_atom_feed(entries: List[Dict]) -> str:
             updated_formatted = current_time.replace('Z', '+00:00')
         
         # Get the enhanced content with iframe
-        enhanced_content = entry.get('summary', '')
+        enhanced_content = entry.get('summary', '') + "Debugging Taken from content"
         
         # Get original description for media:description
         original_summary = entry.get('original_summary', '')
@@ -414,12 +414,11 @@ def generate_atom_feed(entries: List[Dict]) -> str:
 <link rel="alternate" href="{escape(entry.get('link', ''))}"/>
 <author>
 <n>{escape(author_name)}</n>
-<uri>https://www.youtube.com/channel/youtube-shorts-filter</uri>
 </author>
 <published>{published_formatted}</published>
 <updated>{updated_formatted}</updated>
-<content type="html"><![CDATA[{enhanced_content}]]>Debugging Taken from content</content>
-<summary type="html"><![CDATA[{enhanced_content}]]>Debugging Taken from summary</summary>
+<content type="html"><![CDATA[{enhanced_content}]]></content>
+<summary type="html"><![CDATA[{enhanced_content}]]></summary>
 </entry>'''
         
         entries_added += 1
