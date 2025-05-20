@@ -248,18 +248,24 @@ class YouTubeRSSProcessor:
             # Extract video ID for media enclosure
             video_id = self.extract_video_id(entry.get('link', ''))
             
-            # Create processed entry with enhanced content
+            # Preserve original summary from YouTube RSS
+            original_summary = entry.get('summary', '')
+            if hasattr(entry, 'content') and entry.content:
+                original_summary = entry.content[0].value if entry.content else original_summary
+            
+            # Create processed entry with original YouTube RSS structure preserved
             processed_entry = {
                 'title': processed_title,
                 'link': entry.get('link', ''),
                 'published': entry.get('published', ''),
-                'summary': self.generate_enhanced_content(entry),
+                'summary': original_summary,  # Keep original for content
+                'original_summary': original_summary,  # Store original separately
                 'author': entry.get('author', ''),
                 'id': entry.get('id', ''),
                 'duration': duration,
                 'original_title': entry.get('title', ''),
                 'video_id': video_id,
-                'thumbnail': f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg' if video_id else None
+                'thumbnail': f'https://i4.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else None
             }
             
             return processed_entry
